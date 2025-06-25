@@ -42,9 +42,7 @@
   {
    "cell_type": "markdown",
    "id": "4b0e8dad",
-   "metadata": {
-    "jp-MarkdownHeadingCollapsed": true
-   },
+   "metadata": {},
    "source": [
     "## Functions for noise-correction"
    ]
