@@ -1,8 +1,0 @@
-numpy>=1.18.0
-pandas>=1.0.0
-scipy>=1.4.0
-matplotlib>=3.2.0
-
-[dev]
-pytest>=6.0
-jupyter>=1.0

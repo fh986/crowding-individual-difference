@@ -1,7 +1,0 @@
-README.md
-setup.py
-attenuation_toolbox.egg-info/PKG-INFO
-attenuation_toolbox.egg-info/SOURCES.txt
-attenuation_toolbox.egg-info/dependency_links.txt
-attenuation_toolbox.egg-info/requires.txt
-attenuation_toolbox.egg-info/top_level.txt
