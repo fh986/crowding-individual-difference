@@ -106,7 +106,7 @@ Example:
 | `plot_rmse_comparison()` | RMSE vs. sample size plots |
 | `plot_simulation_summary()` | Comprehensive 4-panel summary |
 
-## The Attenuation Correction Formula
+## The Bias-Correction Formula
 
 The classical correction (Spearman, 1904):
 
