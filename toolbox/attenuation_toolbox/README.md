@@ -1,17 +1,18 @@
-# Correlation Attenuation Toolbox
+# Bias-Corrected Correlation Toolbox
 
 A Python toolkit for correcting correlation coefficients for attenuation due to measurement noise.
 
 ## Overview
 
-When measuring the correlation between two variables, measurement noise causes the observed correlation to **underestimate** the true correlation. This is called **attenuation**.
+When measuring the correlation between two variables, measurement noise causes the observed correlation to **underestimate** the true correlation. This is called **attenuation**. 
 
-This toolbox provides:
+Correcting for attenuation (by dividing $r$ by the joint reliability of $X$ and $Y$) **removes bias** but **increases variance**. Whether correction improves accuracy depends on the sample size, measurement reliability, and true underlying correlation. 
 
-1. **Analysis of existing data**: Compute naive and attenuation-corrected correlations with bootstrap confidence intervals
-2. **Study planning**: Simulate data to determine optimal sample sizes and whether to use correction
+This toolbox computes naive and corrected correlations with confidence intervals, and it specifies which correlation estimator (naive or corrected) has lower total error under your specified circumstances.
 
 ## Installation
+
+Use the following code to install the toolbox, then refer to the **tutorial** notebook `tutorial.ipynb` for detailed usage examples.
 
 ```bash
 # Clone the repository
@@ -25,9 +26,7 @@ pip install numpy pandas scipy matplotlib
 pip install -e .
 ```
 
-## Quick Start
-
-### Analyzing Existing Data
+## Example function and output
 
 ```python
 from attenuation_toolbox import analyze_correlation
@@ -60,27 +59,6 @@ Corrected r:               0.5891  95% CI: [0.392, 0.756]
 Reliability X:             0.872
 Reliability Y:             0.894
 Attenuation factor:        0.883
-```
-
-### Planning Future Studies
-
-```python
-from attenuation_toolbox import TaskParameters, run_simulation_grid
-
-# Define expected task parameters (from pilot data or literature)
-task1 = TaskParameters(between_var=0.025, within_var=0.015, mean=0)
-task2 = TaskParameters(between_var=0.055, within_var=0.016, mean=0)
-
-# Run simulations across different sample sizes and measurement counts
-results = run_simulation_grid(
-    task1, task2,
-    sample_sizes=[40, 80, 160],
-    n_repeats_list=[2, 4, 8],
-    true_correlation=0.6,
-    n_iterations=1000
-)
-
-print(results[['n_subjects', 'n_repeats', 'naive_rmse', 'corrected_rmse', 'recommended']])
 ```
 
 ## Data Format
@@ -142,17 +120,6 @@ $$\text{reliability} = \frac{\sigma^2_{between}}{\sigma^2_{between} + \sigma^2_{
 - $\sigma^2_{within}$: Within-subject variance (measurement noise)
 - $k$: Number of repeated measurements
 
-## When to Use Correction
-
-The corrected estimator is **unbiased** but has **higher variance** than the naive estimator. Use the simulation tools to determine which is better for your situation:
-
-- **Small samples + few repeats**: Naive may have lower RMSE despite bias
-- **Large samples + many repeats**: Corrected is usually better
-- **Always report both** for transparency
-
-## Example Notebooks
-
-See `examples/tutorial.ipynb` for detailed usage examples.
 
 ## Requirements
 
