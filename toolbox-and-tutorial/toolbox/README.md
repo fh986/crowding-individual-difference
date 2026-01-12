@@ -1,6 +1,10 @@
 # Bias-Corrected Correlation Toolbox
 
-A Python toolkit for correcting correlation coefficients for attenuation due to measurement noise.
+A Python toolbox for correcting correlation coefficients for attenuation due to measurement noise. 
+
+**Associated paper:** 
+\*Bruns, A., \*Hu, F., Kim, M., Winawer, J., & Pelli, D. G. (in prep). When to correct correlations for attenuation: A toolbox and tutorial.  
+\*Shared first authorship
 
 ## Overview
 
