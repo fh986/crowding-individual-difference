@@ -21,7 +21,7 @@ Use the following code to install the toolbox, then refer to the **tutorial** no
 ```bash
 # Clone the repository
 git clone https://github.com/your-repo/toolbox-and-tutorial.git
-cd correlation-toolbox
+cd correlationToolbox
 
 # Install dependencies
 pip install numpy pandas scipy matplotlib
@@ -33,7 +33,7 @@ pip install -e .
 ## Example function and output
 
 ```python
-from correlation-toolbox import analyze_correlation
+from correlationToolbox import analyze_correlation
 import pandas as pd
 
 # Your data: subjects × repeated measurements for each task
