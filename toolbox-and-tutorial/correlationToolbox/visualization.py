@@ -174,7 +174,7 @@ def plot_correlation_histograms(
     axes[0].hist(naive_samples, bins=bins, alpha=0.7, color='steelblue', edgecolor='black')
     axes[0].axvline(np.mean(naive_samples), color='red', linestyle='--', linewidth=2, label='Mean')
     if true_correlation is not None:
-        axes[0].axvline(true_correlation, color='black', linestyle='-', linewidth=2, label='True r')
+        axes[0].axvline(true_correlation, color='black', linestyle='-', linewidth=2, label=r'$\rho$')
     axes[0].set_xlabel('Correlation')
     axes[0].set_ylabel('Frequency')
     axes[0].set_title('Naive (Uncorrected)')
@@ -184,7 +184,7 @@ def plot_correlation_histograms(
     axes[1].hist(corrected_valid, bins=bins, alpha=0.7, color='darkorange', edgecolor='black')
     axes[1].axvline(np.mean(corrected_valid), color='red', linestyle='--', linewidth=2, label='Mean')
     if true_correlation is not None:
-        axes[1].axvline(true_correlation, color='black', linestyle='-', linewidth=2, label='True r')
+        axes[1].axvline(true_correlation, color='black', linestyle='-', linewidth=2, label=r'$\rho$')
     axes[1].set_xlabel('Correlation')
     axes[1].set_title('Attenuation-Corrected')
     axes[1].legend()
