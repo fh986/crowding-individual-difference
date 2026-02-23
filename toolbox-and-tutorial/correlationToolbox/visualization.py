@@ -35,7 +35,7 @@ def set_publication_style():
 
 def plot_correlation_heatmaps(
     results_df: pd.DataFrame,
-    var_names: Optional[List[str]] = None,
+    task_names: Optional[List[str]] = None,
     figsize: Tuple[int, int] = (14, 5),
     cmap: str = 'RdBu_r',
     vmin: float = -1.0,
@@ -50,9 +50,9 @@ def plot_correlation_heatmaps(
     ----------
     results_df : pd.DataFrame
         Output from analyze_all_pairs() with columns:
-        var_x, var_y, naive_r, corrected_r
-    var_names : list of str, optional
-        Ordered list of variable names for axes.
+        task_x, task_y, naive_r, corrected_r
+    task_names : list of str, optional
+        Ordered list of task names for axes.
     figsize : tuple
         Figure size.
     cmap : str
@@ -68,20 +68,20 @@ def plot_correlation_heatmaps(
     -------
     matplotlib.Figure
     """
-    # Get unique vars
-    if var_names is None:
-        var_names = sorted(set(results_df['var_x'].tolist() + results_df['var_y'].tolist()))
+    # Get unique tasks
+    if task_names is None:
+        task_names = sorted(set(results_df['task_x'].tolist() + results_df['task_y'].tolist()))
     
-    n_vars = len(var_names)
-    var_idx = {name: i for i, name in enumerate(var_names)}
+    n_tasks = len(task_names)
+    task_idx = {name: i for i, name in enumerate(task_names)}
     
     # Create correlation matrices
-    naive_matrix = np.eye(n_vars)
-    corrected_matrix = np.eye(n_vars)
+    naive_matrix = np.eye(n_tasks)
+    corrected_matrix = np.eye(n_tasks)
     
     for _, row in results_df.iterrows():
-        i = var_idx[row['var_x']]
-        j = var_idx[row['var_y']]
+        i = task_idx[row['task_x']]
+        j = task_idx[row['task_y']]
         naive_matrix[i, j] = naive_matrix[j, i] = row['naive_r']
         corrected_matrix[i, j] = corrected_matrix[j, i] = row['corrected_r']
     
@@ -91,14 +91,14 @@ def plot_correlation_heatmaps(
     # Naive correlations
     im1 = axes[0].imshow(naive_matrix, cmap=cmap, vmin=vmin, vmax=vmax)
     axes[0].set_title('Naive (Uncorrected) Correlations', fontsize=14)
-    axes[0].set_xticks(range(n_vars))
-    axes[0].set_yticks(range(n_vars))
-    axes[0].set_xticklabels(var_names, rotation=45, ha='right')
-    axes[0].set_yticklabels(var_names)
+    axes[0].set_xticks(range(n_tasks))
+    axes[0].set_yticks(range(n_tasks))
+    axes[0].set_xticklabels(task_names, rotation=45, ha='right')
+    axes[0].set_yticklabels(task_names)
     
     if annotate:
-        for i in range(n_vars):
-            for j in range(n_vars):
+        for i in range(n_tasks):
+            for j in range(n_tasks):
                 text_color = 'white' if abs(naive_matrix[i, j]) > 0.5 else 'black'
                 axes[0].text(j, i, f'{naive_matrix[i, j]:.2f}',
                            ha='center', va='center', color=text_color, fontsize=10)
@@ -106,14 +106,14 @@ def plot_correlation_heatmaps(
     # Corrected correlations
     im2 = axes[1].imshow(corrected_matrix, cmap=cmap, vmin=vmin, vmax=vmax)
     axes[1].set_title('Attenuation-Corrected Correlations', fontsize=14)
-    axes[1].set_xticks(range(n_vars))
-    axes[1].set_yticks(range(n_vars))
-    axes[1].set_xticklabels(var_names, rotation=45, ha='right')
-    axes[1].set_yticklabels(var_names)
+    axes[1].set_xticks(range(n_tasks))
+    axes[1].set_yticks(range(n_tasks))
+    axes[1].set_xticklabels(task_names, rotation=45, ha='right')
+    axes[1].set_yticklabels(task_names)
     
     if annotate:
-        for i in range(n_vars):
-            for j in range(n_vars):
+        for i in range(n_tasks):
+            for j in range(n_tasks):
                 val = corrected_matrix[i, j]
                 # Handle values > 1 (can happen with correction)
                 display_val = min(val, 1.0) if val > 0 else max(val, -1.0)
@@ -355,8 +355,8 @@ def plot_scatter_with_reliability(
     reliability_y: float,
     naive_r: float,
     corrected_r: float,
-    xlabel: str = 'var 1',
-    ylabel: str = 'var 2',
+    xlabel: str = 'Task 1',
+    ylabel: str = 'Task 2',
     figsize: Tuple[int, int] = (8, 8),
     save_path: Optional[str] = None
 ) -> plt.Figure:
