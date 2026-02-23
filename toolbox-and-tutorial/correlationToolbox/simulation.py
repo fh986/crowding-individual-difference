@@ -20,7 +20,7 @@ from dataclasses import dataclass
 import warnings
 
 from .core import (
-    TaskParameters, 
+    varParameters, 
     compute_reliability, 
     correct_correlation,
     CorrelationResult
@@ -34,7 +34,7 @@ class SimulationResult:
     
     Attributes:
         n_subjects: Sample size used
-        n_repeats: Number of repeated measurements per task
+        n_repeats: Number of repeated measurements per variable
         true_correlation: Ground truth correlation
         n_iterations: Number of simulation iterations
         
@@ -84,31 +84,31 @@ class SimulationResult:
 
 
 def simulate_test_retest_data(
-    task1_params: TaskParameters,
-    task2_params: TaskParameters,
+    var1_params: varParameters,
+    var2_params: varParameters,
     n_subjects: int = 100,
     n_repeats: int = 4,
     true_correlation: float = 0.6,
     random_state: Optional[int] = None
 ) -> pd.DataFrame:
     """
-    Simulate test-retest data for two correlated tasks with measurement noise.
+    Simulate test-retest data for two correlated variables with measurement noise.
     
-    Generates data where each subject has a "true" latent score on each task,
-    and multiple noisy measurements of each task are observed.
+    Generates data where each subject has a "true" latent score on each variable,
+    and multiple noisy measurements of each variable are observed.
     
     Parameters
     ----------
-    task1_params : TaskParameters
-        Parameters for task 1 (between_var, within_var, mean).
-    task2_params : TaskParameters
-        Parameters for task 2.
+    var1_params : varParameters
+        Parameters for var 1 (between_var, within_var, mean).
+    var2_params : varParameters
+        Parameters for var 2.
     n_subjects : int, default=100
         Number of subjects to simulate.
     n_repeats : int, default=4
-        Number of repeated measurements per task.
+        Number of repeated measurements per var.
     true_correlation : float, default=0.6
-        True (latent) correlation between tasks.
+        True (latent) correlation between vars.
     random_state : int, optional
         Random seed for reproducibility.
     
@@ -116,99 +116,99 @@ def simulate_test_retest_data(
     -------
     pd.DataFrame
         Simulated data with columns:
-        - task1_true, task2_true: Latent true scores
-        - task1_repeat1, task1_repeat2, ...: Noisy measurements for task 1
-        - task2_repeat1, task2_repeat2, ...: Noisy measurements for task 2
-        - task1_mean, task2_mean: Mean across repeats
+        - var1_true, var2_true: Latent true scores
+        - var1_repeat1, var1_repeat2, ...: Noisy measurements for variable 1
+        - var2_repeat1, var2_repeat2, ...: Noisy measurements for variable 2
+        - var1_mean, var2_mean: Mean across repeats
     """
     if random_state is not None:
         np.random.seed(random_state)
     
     # Create covariance matrix for true scores
-    cov_xy = true_correlation * np.sqrt(task1_params.between_var * task2_params.between_var)
+    cov_xy = true_correlation * np.sqrt(var1_params.between_var * var2_params.between_var)
     cov_matrix = np.array([
-        [task1_params.between_var, cov_xy],
-        [cov_xy, task2_params.between_var]
+        [var1_params.between_var, cov_xy],
+        [cov_xy, var2_params.between_var]
     ])
     
     # Simulate true latent scores
     true_scores = np.random.multivariate_normal(
-        mean=[task1_params.mean, task2_params.mean],
+        mean=[var1_params.mean, var2_params.mean],
         cov=cov_matrix,
         size=n_subjects
     )
     
-    true_task1 = true_scores[:, 0]
-    true_task2 = true_scores[:, 1]
+    true_var1 = true_scores[:, 0]
+    true_var2 = true_scores[:, 1]
     
     # Initialize data dictionary
     data = {
-        'task1_true': true_task1,
-        'task2_true': true_task2
+        'var1_true': true_var1,
+        'var2_true': true_var2
     }
     
     # Generate noisy repeated measurements
-    task1_measurements = []
-    task2_measurements = []
+    var1_measurements = []
+    var2_measurements = []
     
     for i in range(n_repeats):
         # Add measurement noise
-        noise1 = np.random.normal(0, np.sqrt(task1_params.within_var), n_subjects)
-        noise2 = np.random.normal(0, np.sqrt(task2_params.within_var), n_subjects)
+        noise1 = np.random.normal(0, np.sqrt(var1_params.within_var), n_subjects)
+        noise2 = np.random.normal(0, np.sqrt(var2_params.within_var), n_subjects)
         
-        measurement1 = true_task1 + noise1
-        measurement2 = true_task2 + noise2
+        measurement1 = true_var1 + noise1
+        measurement2 = true_var2 + noise2
         
-        data[f'task1_repeat{i+1}'] = measurement1
-        data[f'task2_repeat{i+1}'] = measurement2
+        data[f'var1_repeat{i+1}'] = measurement1
+        data[f'var2_repeat{i+1}'] = measurement2
         
-        task1_measurements.append(measurement1)
-        task2_measurements.append(measurement2)
+        var1_measurements.append(measurement1)
+        var2_measurements.append(measurement2)
     
     # Add means across repeats
-    data['task1_mean'] = np.mean(task1_measurements, axis=0)
-    data['task2_mean'] = np.mean(task2_measurements, axis=0)
+    data['var1_mean'] = np.mean(var1_measurements, axis=0)
+    data['var2_mean'] = np.mean(var2_measurements, axis=0)
     
     return pd.DataFrame(data)
 
 
-def simulate_multi_task_data(
-    task_params_list: List[TaskParameters],
+def simulate_multi_var_data(
+    var_params_list: List[varParameters],
     correlation_matrix: np.ndarray,
     n_subjects: int = 100,
     n_repeats: int = 4,
     random_state: Optional[int] = None
 ) -> pd.DataFrame:
     """
-    Simulate test-retest data for multiple correlated tasks.
+    Simulate test-retest data for multiple correlated variables.
     
     Parameters
     ----------
-    task_params_list : list of TaskParameters
-        Parameters for each task.
+    var_params_list : list of varParameters
+        Parameters for each variable.
     correlation_matrix : np.ndarray
-        Matrix of true correlations between tasks.
+        Matrix of true correlations between variables.
     n_subjects : int
         Number of subjects.
     n_repeats : int
-        Number of repeated measurements per task.
+        Number of repeated measurements per variable.
     random_state : int, optional
         Random seed.
     
     Returns
     -------
     pd.DataFrame
-        Simulated data with columns for each task's repeats.
+        Simulated data with columns for each variable's repeats.
     """
     if random_state is not None:
         np.random.seed(random_state)
     
-    n_tasks = len(task_params_list)
+    n_vars = len(var_params_list)
     
     # Build covariance matrix from correlations and between-subject variances
-    between_vars = np.array([p.between_var for p in task_params_list])
-    within_vars = np.array([p.within_var for p in task_params_list])
-    means = np.array([p.mean for p in task_params_list])
+    between_vars = np.array([p.between_var for p in var_params_list])
+    within_vars = np.array([p.within_var for p in var_params_list])
+    means = np.array([p.mean for p in var_params_list])
     
     # Convert correlation matrix to covariance matrix
     sd_matrix = np.sqrt(np.outer(between_vars, between_vars))
@@ -223,25 +223,25 @@ def simulate_multi_task_data(
     
     # Build data dictionary
     data = {}
-    for t, params in enumerate(task_params_list):
-        task_name = params.name
-        data[f'{task_name}_true'] = true_scores[:, t]
+    for t, params in enumerate(var_params_list):
+        var_name = params.name
+        data[f'{var_name}_true'] = true_scores[:, t]
         
         measurements = []
         for r in range(n_repeats):
             noise = np.random.normal(0, np.sqrt(params.within_var), n_subjects)
             measurement = true_scores[:, t] + noise
-            data[f'{task_name}_repeat{r+1}'] = measurement
+            data[f'{var_name}_repeat{r+1}'] = measurement
             measurements.append(measurement)
         
-        data[f'{task_name}_mean'] = np.mean(measurements, axis=0)
+        data[f'{var_name}_mean'] = np.mean(measurements, axis=0)
     
     return pd.DataFrame(data)
 
 
 def run_simulation(
-    task1_params: TaskParameters,
-    task2_params: TaskParameters,
+    var1_params: varParameters,
+    var2_params: varParameters,
     n_subjects: int = 100,
     n_repeats: int = 4,
     true_correlation: float = 0.6,
@@ -256,14 +256,14 @@ def run_simulation(
     
     Parameters
     ----------
-    task1_params : TaskParameters
-        Parameters for task 1.
-    task2_params : TaskParameters
-        Parameters for task 2.
+    var1_params : varParameters
+        Parameters for variable 1.
+    var2_params : varParameters
+        Parameters for variable 2.
     n_subjects : int
         Sample size per simulation.
     n_repeats : int
-        Number of repeated measurements per task.
+        Number of repeated measurements per variable.
     true_correlation : float
         Ground truth correlation.
     n_iterations : int
@@ -285,24 +285,24 @@ def run_simulation(
     for _ in range(n_iterations):
         # Simulate dataset
         sim_data = simulate_test_retest_data(
-            task1_params, task2_params,
+            var1_params, var2_params,
             n_subjects=n_subjects,
             n_repeats=n_repeats,
             true_correlation=true_correlation
         )
         
         # Compute naive correlation (using means)
-        naive_r, _ = pearsonr(sim_data['task1_mean'], sim_data['task2_mean'])
+        naive_r, _ = pearsonr(sim_data['var1_mean'], sim_data['var2_mean'])
         
         # Compute reliabilities
-        task1_cols = [f'task1_repeat{i+1}' for i in range(n_repeats)]
-        task2_cols = [f'task2_repeat{i+1}' for i in range(n_repeats)]
+        var1_cols = [f'var1_repeat{i+1}' for i in range(n_repeats)]
+        var2_cols = [f'var2_repeat{i+1}' for i in range(n_repeats)]
         
-        rel_task1 = compute_reliability(sim_data[task1_cols])
-        rel_task2 = compute_reliability(sim_data[task2_cols])
+        rel_var1 = compute_reliability(sim_data[var1_cols])
+        rel_var2 = compute_reliability(sim_data[var2_cols])
         
         # Compute corrected correlation
-        attenuation = np.sqrt(rel_task1 * rel_task2)
+        attenuation = np.sqrt(rel_var1 * rel_var2)
         corrected_r = naive_r / attenuation if attenuation > 0 else np.nan
         
         naive_estimates.append(naive_r)
@@ -351,8 +351,8 @@ def run_simulation(
 
 
 def run_simulation_grid(
-    task1_params: TaskParameters,
-    task2_params: TaskParameters,
+    var1_params: varParameters,
+    var2_params: varParameters,
     sample_sizes: List[int] = [40, 80, 160, 320],
     n_repeats_list: List[int] = [2, 4, 8],
     true_correlation: float = 0.6,
@@ -366,8 +366,8 @@ def run_simulation_grid(
     
     Parameters
     ----------
-    task1_params, task2_params : TaskParameters
-        Task parameters.
+    var1_params, var2_params : varParameters
+        variable parameters.
     sample_sizes : list of int
         Sample sizes to evaluate.
     n_repeats_list : list of int
@@ -397,7 +397,7 @@ def run_simulation_grid(
             print(f"Running condition {current}/{total_conditions}: N={n_subjects}, repeats={n_repeats}")
             
             sim_result = run_simulation(
-                task1_params, task2_params,
+                var1_params, var2_params,
                 n_subjects=n_subjects,
                 n_repeats=n_repeats,
                 true_correlation=true_correlation,
@@ -425,8 +425,8 @@ def run_simulation_grid(
 
 
 def get_simulation_distributions(
-    task1_params: TaskParameters,
-    task2_params: TaskParameters,
+    var1_params: varParameters,
+    var2_params: varParameters,
     n_subjects: int = 100,
     n_repeats: int = 4,
     true_correlation: float = 0.6,
@@ -456,21 +456,21 @@ def get_simulation_distributions(
     
     for _ in range(n_iterations):
         sim_data = simulate_test_retest_data(
-            task1_params, task2_params,
+            var1_params, var2_params,
             n_subjects=n_subjects,
             n_repeats=n_repeats,
             true_correlation=true_correlation
         )
         
-        naive_r, _ = pearsonr(sim_data['task1_mean'], sim_data['task2_mean'])
+        naive_r, _ = pearsonr(sim_data['var1_mean'], sim_data['var2_mean'])
         
-        task1_cols = [f'task1_repeat{i+1}' for i in range(n_repeats)]
-        task2_cols = [f'task2_repeat{i+1}' for i in range(n_repeats)]
+        var1_cols = [f'var1_repeat{i+1}' for i in range(n_repeats)]
+        var2_cols = [f'var2_repeat{i+1}' for i in range(n_repeats)]
         
-        rel_task1 = compute_reliability(sim_data[task1_cols])
-        rel_task2 = compute_reliability(sim_data[task2_cols])
+        rel_var1 = compute_reliability(sim_data[var1_cols])
+        rel_var2 = compute_reliability(sim_data[var2_cols])
         
-        attenuation = np.sqrt(rel_task1 * rel_task2)
+        attenuation = np.sqrt(rel_var1 * rel_var2)
         corrected_r = naive_r / attenuation if attenuation > 0 else np.nan
         
         naive_estimates.append(naive_r)
@@ -483,8 +483,8 @@ def get_simulation_distributions(
 
 
 def estimate_required_sample_size(
-    task1_params: TaskParameters,
-    task2_params: TaskParameters,
+    var1_params: varParameters,
+    var2_params: varParameters,
     true_correlation: float = 0.6,
     n_repeats: int = 4,
     target_rmse: float = 0.1,
@@ -499,8 +499,8 @@ def estimate_required_sample_size(
     
     Parameters
     ----------
-    task1_params, task2_params : TaskParameters
-        Task parameters.
+    var1_params, var2_params : varParameters
+        variable parameters.
     true_correlation : float
         True correlation.
     n_repeats : int
@@ -530,7 +530,7 @@ def estimate_required_sample_size(
             mid = (low + high) // 2
             
             result = run_simulation(
-                task1_params, task2_params,
+                var1_params, var2_params,
                 n_subjects=mid,
                 n_repeats=n_repeats,
                 true_correlation=true_correlation,
@@ -557,8 +557,8 @@ def estimate_required_sample_size(
 
 def power_analysis_correlation(
     effect_size: float,  # expected true correlation
-    task1_reliability: float,
-    task2_reliability: float,
+    var1_reliability: float,
+    var2_reliability: float,
     alpha: float = 0.05,
     power: float = 0.80,
     use_correction: bool = True
@@ -573,8 +573,8 @@ def power_analysis_correlation(
     ----------
     effect_size : float
         Expected true (latent) correlation.
-    task1_reliability, task2_reliability : float
-        Reliabilities of the two tasks.
+    var1_reliability, var2_reliability : float
+        Reliabilities of the two variables.
     alpha : float
         Significance level.
     power : float
@@ -592,7 +592,7 @@ def power_analysis_correlation(
     
     # Attenuate effect size if not using correction
     if not use_correction:
-        attenuation = np.sqrt(task1_reliability * task2_reliability)
+        attenuation = np.sqrt(var1_reliability * var2_reliability)
         effect_size = effect_size * attenuation
     
     # Fisher's z transformation

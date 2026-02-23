@@ -21,20 +21,20 @@ from dataclasses import dataclass
 
 
 @dataclass
-class TaskParameters:
+class varParameters:
     """
-    Parameters for a single task/variable.
+    Parameters for a single var/variable.
     
     Attributes:
         between_var: Between-subject variance (true individual differences)
         within_var: Within-subject variance (measurement noise)
         mean: Mean of the variable
-        name: Optional name for the task
+        name: Optional name for the var
     """
     between_var: float
     within_var: float
     mean: float = 0.0
-    name: str = "task"
+    name: str = "var"
     
     @property
     def reliability(self) -> float:
@@ -216,8 +216,8 @@ def correct_correlation(r_observed: float,
     return r_observed / attenuation
 
 
-def analyze_correlation(task1_measurements: pd.DataFrame,
-                       task2_measurements: pd.DataFrame,
+def analyze_correlation(var1_measurements: pd.DataFrame,
+                       var2_measurements: pd.DataFrame,
                        n_bootstrap: int = 1000,
                        confidence_level: float = 0.95,
                        random_state: Optional[int] = None) -> CorrelationResult:
@@ -229,12 +229,12 @@ def analyze_correlation(task1_measurements: pd.DataFrame,
     
     Parameters
     ----------
-    task1_measurements : pd.DataFrame
-        DataFrame of shape (n_subjects, n_repeats) for task 1.
+    var1_measurements : pd.DataFrame
+        DataFrame of shape (n_subjects, n_repeats) for variable 1.
         Each row is a subject, each column is a repeated measurement.
-    task2_measurements : pd.DataFrame
-        DataFrame of shape (n_subjects, n_repeats) for task 2.
-        Must have the same number of rows as task1_measurements.
+    var2_measurements : pd.DataFrame
+        DataFrame of shape (n_subjects, n_repeats) for variable 2.
+        Must have the same number of rows as var1_measurements.
     n_bootstrap : int, default=1000
         Number of bootstrap iterations for confidence intervals.
     confidence_level : float, default=0.95
@@ -250,28 +250,28 @@ def analyze_correlation(task1_measurements: pd.DataFrame,
     Example
     -------
     >>> import pandas as pd
-    >>> # Task 1: 50 subjects, 4 repeats
-    >>> task1 = pd.DataFrame(np.random.randn(50, 4))
-    >>> # Task 2: 50 subjects, 4 repeats
-    >>> task2 = pd.DataFrame(np.random.randn(50, 4))
-    >>> result = analyze_correlation(task1, task2)
+    >>> # variable 1: 50 subjects, 4 repeats
+    >>> var1 = pd.DataFrame(np.random.randn(50, 4))
+    >>> # variable 2: 50 subjects, 4 repeats
+    >>> var2 = pd.DataFrame(np.random.randn(50, 4))
+    >>> result = analyze_correlation(var1, var2)
     >>> print(result)
     """
     if random_state is not None:
         np.random.seed(random_state)
     
-    n_subjects = len(task1_measurements)
-    if len(task2_measurements) != n_subjects:
-        raise ValueError("Task measurements must have the same number of subjects.")
+    n_subjects = len(var1_measurements)
+    if len(var2_measurements) != n_subjects:
+        raise ValueError("variable measurements must have the same number of subjects.")
     
     # Compute subject means for correlation
-    means_x = task1_measurements.mean(axis=1).values
-    means_y = task2_measurements.mean(axis=1).values
+    means_x = var1_measurements.mean(axis=1).values
+    means_y = var2_measurements.mean(axis=1).values
     
     # Point estimates
     naive_r, _ = pearsonr(means_x, means_y)
-    rel_x = compute_reliability(task1_measurements)
-    rel_y = compute_reliability(task2_measurements)
+    rel_x = compute_reliability(var1_measurements)
+    rel_y = compute_reliability(var2_measurements)
     attenuation = np.sqrt(rel_x * rel_y)
     corrected_r = naive_r / attenuation if attenuation > 0 else np.nan
     
@@ -283,15 +283,15 @@ def analyze_correlation(task1_measurements: pd.DataFrame,
         # Resample subjects with replacement
         idx = np.random.choice(n_subjects, size=n_subjects, replace=True)
         
-        boot_task1 = task1_measurements.iloc[idx].reset_index(drop=True)
-        boot_task2 = task2_measurements.iloc[idx].reset_index(drop=True)
+        boot_var1 = var1_measurements.iloc[idx].reset_index(drop=True)
+        boot_var2 = var2_measurements.iloc[idx].reset_index(drop=True)
         
-        boot_means_x = boot_task1.mean(axis=1).values
-        boot_means_y = boot_task2.mean(axis=1).values
+        boot_means_x = boot_var1.mean(axis=1).values
+        boot_means_y = boot_var2.mean(axis=1).values
         
         boot_naive_r, _ = pearsonr(boot_means_x, boot_means_y)
-        boot_rel_x = compute_reliability(boot_task1)
-        boot_rel_y = compute_reliability(boot_task2)
+        boot_rel_x = compute_reliability(boot_var1)
+        boot_rel_y = compute_reliability(boot_var2)
         boot_atten = np.sqrt(boot_rel_x * boot_rel_y)
         boot_corrected_r = boot_naive_r / boot_atten if boot_atten > 0 else np.nan
         
@@ -318,25 +318,25 @@ def analyze_correlation(task1_measurements: pd.DataFrame,
         naive_ci=naive_ci,
         corrected_ci=corrected_ci,
         n_subjects=n_subjects,
-        n_repeats_x=task1_measurements.shape[1],
-        n_repeats_y=task2_measurements.shape[1]
+        n_repeats_x=var1_measurements.shape[1],
+        n_repeats_y=var2_measurements.shape[1]
     )
 
 
 def analyze_all_pairs(data: pd.DataFrame,
-                     task_prefixes: List[str],
+                     var_prefixes: List[str],
                      n_bootstrap: int = 1000,
                      confidence_level: float = 0.95,
                      random_state: Optional[int] = None) -> pd.DataFrame:
     """
-    Analyze correlations between all pairs of tasks in a dataset.
+    Analyze correlations between all pairs of variables in a dataset.
     
     Parameters
     ----------
     data : pd.DataFrame
-        DataFrame where columns are named like "task1_repeat1", "task1_repeat2", etc.
-    task_prefixes : list of str
-        List of task name prefixes (e.g., ["task1", "task2", "task3"]).
+        DataFrame where columns are named like "var1_repeat1", "var1_repeat2", etc.
+    var_prefixes : list of str
+        List of variable name prefixes (e.g., ["var1", "var2", "var3"]).
     n_bootstrap : int, default=1000
         Number of bootstrap iterations.
     confidence_level : float, default=0.95
@@ -347,40 +347,40 @@ def analyze_all_pairs(data: pd.DataFrame,
     Returns
     -------
     pd.DataFrame
-        Results table with columns for each task pair's correlations and CIs.
+        Results table with columns for each variable pair's correlations and CIs.
     """
     results = []
     
-    for i, task_x in enumerate(task_prefixes):
-        for task_y in task_prefixes[i+1:]:
-            # Extract measurements for each task
-            cols_x = [c for c in data.columns if c.startswith(task_x)]
-            cols_y = [c for c in data.columns if c.startswith(task_y)]
+    for i, var_x in enumerate(var_prefixes):
+        for var_y in var_prefixes[i+1:]:
+            # Extract measurements for each var
+            cols_x = [c for c in data.columns if c.startswith(var_x)]
+            cols_y = [c for c in data.columns if c.startswith(var_y)]
             
             if len(cols_x) < 2 or len(cols_y) < 2:
                 continue
             
-            task1_data = data[cols_x].dropna()
-            task2_data = data[cols_y].dropna()
+            var1_data = data[cols_x].dropna()
+            var2_data = data[cols_y].dropna()
             
             # Ensure same subjects
-            common_idx = task1_data.index.intersection(task2_data.index)
-            task1_data = task1_data.loc[common_idx]
-            task2_data = task2_data.loc[common_idx]
+            common_idx = var1_data.index.intersection(var2_data.index)
+            var1_data = var1_data.loc[common_idx]
+            var2_data = var2_data.loc[common_idx]
             
-            if len(task1_data) < 10:
+            if len(var1_data) < 10:
                 continue
             
             result = analyze_correlation(
-                task1_data, task2_data,
+                var1_data, var2_data,
                 n_bootstrap=n_bootstrap,
                 confidence_level=confidence_level,
                 random_state=random_state
             )
             
             results.append({
-                'task_x': task_x,
-                'task_y': task_y,
+                'var_x': var_x,
+                'var_y': var_y,
                 'n_subjects': result.n_subjects,
                 'naive_r': result.naive_r,
                 'naive_ci_lower': result.naive_ci[0],
@@ -396,48 +396,48 @@ def analyze_all_pairs(data: pd.DataFrame,
     return pd.DataFrame(results)
 
 
-def extract_task_measurements(data: pd.DataFrame, 
-                             task_prefix: str) -> pd.DataFrame:
+def extract_var_measurements(data: pd.DataFrame, 
+                             var_prefix: str) -> pd.DataFrame:
     """
-    Extract all repeated measurements for a task from a DataFrame.
+    Extract all repeated measurements for a variable from a DataFrame.
     
     Parameters
     ----------
     data : pd.DataFrame
-        Full dataset with columns like "task1_repeat1", "task1_repeat2", etc.
-    task_prefix : str
-        Prefix for the task (e.g., "task1").
+        Full dataset with columns like "var1_repeat1", "var1_repeat2", etc.
+    var_prefix : str
+        Prefix for the var (e.g., "var1").
     
     Returns
     -------
     pd.DataFrame
-        Subset with only columns matching the task prefix.
+        Subset with only columns matching the var prefix.
     """
-    cols = [c for c in data.columns if c.startswith(task_prefix)]
+    cols = [c for c in data.columns if c.startswith(var_prefix)]
     return data[cols]
 
 
-def summarize_task_statistics(data: pd.DataFrame,
-                             task_prefixes: List[str]) -> pd.DataFrame:
+def summarize_var_statistics(data: pd.DataFrame,
+                             var_prefixes: List[str]) -> pd.DataFrame:
     """
-    Compute summary statistics for each task.
+    Compute summary statistics for each variable.
     
     Parameters
     ----------
     data : pd.DataFrame
-        Dataset with task measurements.
-    task_prefixes : list of str
-        List of task name prefixes.
+        Dataset with variable measurements.
+    var_prefixes : list of str
+        List of variable name prefixes.
     
     Returns
     -------
     pd.DataFrame
-        Summary table with mean, within-var, between-var, reliability for each task.
+        Summary table with mean, within-var, between-var, reliability for each variable.
     """
     summaries = []
     
-    for task in task_prefixes:
-        cols = [c for c in data.columns if c.startswith(task)]
+    for var in var_prefixes:
+        cols = [c for c in data.columns if c.startswith(var)]
         if len(cols) < 2:
             continue
         
@@ -448,7 +448,7 @@ def summarize_task_statistics(data: pd.DataFrame,
         subject_means = measurements.mean(axis=1)
         
         summaries.append({
-            'task': task,
+            'var': var,
             'n_subjects': len(measurements),
             'n_repeats': len(cols),
             'mean': subject_means.mean(),
