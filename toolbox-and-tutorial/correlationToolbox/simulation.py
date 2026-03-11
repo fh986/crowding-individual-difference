@@ -59,6 +59,8 @@ class SimulationResult:
     naive_sd: float
     naive_rmse: float
     naive_ci: Tuple[float, float]
+
+    attenuation: float
     
     corrected_mean: float
     corrected_sd: float
@@ -69,21 +71,22 @@ class SimulationResult:
     
     def __str__(self):
         return (
-            f"Simulation Results (N={self.n_subjects}, repeats={self.n_repeats})\n"
+            f"Simulation Results (N = {self.n_subjects}, repeats = {self.n_repeats})\n"
             f"{'='*60}\n"
-            f"True correlation: {self.true_correlation:.4f}\n"
-            f"Iterations: {self.n_iterations}\n\n"
+            f"True correlation: {self.true_correlation:.3f}\n"
+            f"Iterations: {self.n_iterations}\n"
+            f"Attenuation factor: {self.attenuation:.3f}\n\n"
             f"Naive Estimator:\n"
-            f"  Mean: {self.naive_mean:.4f}  SD: {self.naive_sd:.4f}\n"
-            f"  RMSE: {self.naive_rmse:.4f}  95% CI: [{self.naive_ci[0]:.3f}, {self.naive_ci[1]:.3f}]\n\n"
+            f"  Mean: {self.naive_mean:.3f}  SD: {self.naive_sd:.3f}\n"
+            f"  RMSE: {self.naive_rmse:.3f}  95% CI: [{self.naive_ci[0]:.3f}, {self.naive_ci[1]:.3f}]\n\n"
             f"Corrected Estimator:\n"
-            f"  Mean: {self.corrected_mean:.4f}  SD: {self.corrected_sd:.4f}\n"
-            f"  RMSE: {self.corrected_rmse:.4f}  95% CI: [{self.corrected_ci[0]:.3f}, {self.corrected_ci[1]:.3f}]\n\n"
+            f"  Mean: {self.corrected_mean:.3f}  SD: {self.corrected_sd:.3f}\n"
+            f"  RMSE: {self.corrected_rmse:.3f}  95% CI: [{self.corrected_ci[0]:.3f}, {self.corrected_ci[1]:.3f}]\n\n"
             f"Recommended estimator: {self.recommended_estimator}\n"
         )
 
 
-def simulate_test_retest_data(
+def simulate_data(
     task1_params: TaskParameters,
     task2_params: TaskParameters,
     n_subjects: int = 100,
@@ -281,10 +284,11 @@ def run_simulation(
     
     naive_estimates = []
     corrected_estimates = []
+    attenuation_factors = []
     
     for _ in range(n_iterations):
         # Simulate dataset
-        sim_data = simulate_test_retest_data(
+        sim_data = simulate_data(
             task1_params, task2_params,
             n_subjects=n_subjects,
             n_repeats=n_repeats,
@@ -306,10 +310,12 @@ def run_simulation(
         corrected_r = naive_r / attenuation if attenuation > 0 else np.nan
         
         naive_estimates.append(naive_r)
+        attenuation_factors.append(attenuation)
         corrected_estimates.append(corrected_r)
     
     # Convert to arrays and filter NaNs for corrected
     naive_arr = np.array(naive_estimates)
+    attenuation_arr = np.array(attenuation)
     corrected_arr = np.array(corrected_estimates)
     corrected_valid = corrected_arr[~np.isnan(corrected_arr)]
     
@@ -321,7 +327,7 @@ def run_simulation(
     naive_sd = np.std(naive_arr)
     naive_rmse = rmse(naive_arr, true_correlation)
     naive_ci = (np.percentile(naive_arr, 2.5), np.percentile(naive_arr, 97.5))
-    
+    attenuation_mean = np.mean(attenuation_arr)
     corrected_mean = np.mean(corrected_valid)
     corrected_sd = np.std(corrected_valid)
     corrected_rmse = rmse(corrected_valid, true_correlation)
@@ -342,6 +348,7 @@ def run_simulation(
         naive_sd=naive_sd,
         naive_rmse=naive_rmse,
         naive_ci=naive_ci,
+        attenuation=attenuation_mean,
         corrected_mean=corrected_mean,
         corrected_sd=corrected_sd,
         corrected_rmse=corrected_rmse,
@@ -455,7 +462,7 @@ def get_simulation_distributions(
     corrected_estimates = []
     
     for _ in range(n_iterations):
-        sim_data = simulate_test_retest_data(
+        sim_data = simulate_data(
             task1_params, task2_params,
             n_subjects=n_subjects,
             n_repeats=n_repeats,

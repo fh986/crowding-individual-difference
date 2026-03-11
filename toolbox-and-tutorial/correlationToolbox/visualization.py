@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
+from matplotlib.colors import ListedColormap
 from matplotlib.patches import Rectangle
 from typing import Dict, List, Optional, Tuple, Union
 import warnings
@@ -21,14 +22,14 @@ def set_publication_style():
     """Set matplotlib parameters for publication-quality figures."""
     plt.rcParams.update({
         'font.size': 12,
-        'axes.labelsize': 14,
-        'axes.titlesize': 16,
-        'xtick.labelsize': 12,
-        'ytick.labelsize': 12,
-        'legend.fontsize': 11,
+        'axes.labelsize': 20,
+        'axes.titlesize': 22,
+        'xtick.labelsize': 14,
+        'ytick.labelsize': 14,
+        'legend.fontsize': 12,
         'figure.figsize': (8, 6),
-        'figure.dpi': 100,
-        'savefig.dpi': 300,
+        'figure.dpi': 200,
+        'savefig.dpi': 600,
         'savefig.bbox': 'tight'
     })
 
@@ -90,7 +91,7 @@ def plot_correlation_heatmaps(
     
     # Naive correlations
     im1 = axes[0].imshow(naive_matrix, cmap=cmap, vmin=vmin, vmax=vmax)
-    axes[0].set_title('Naive (Uncorrected) Correlations', fontsize=14)
+    axes[0].set_title('Naive (uncorrected) correlations', fontsize=18)
     axes[0].set_xticks(range(n_tasks))
     axes[0].set_yticks(range(n_tasks))
     axes[0].set_xticklabels(task_names, rotation=45, ha='right')
@@ -101,11 +102,11 @@ def plot_correlation_heatmaps(
             for j in range(n_tasks):
                 text_color = 'white' if abs(naive_matrix[i, j]) > 0.5 else 'black'
                 axes[0].text(j, i, f'{naive_matrix[i, j]:.2f}',
-                           ha='center', va='center', color=text_color, fontsize=10)
+                           ha='center', va='center', color=text_color, fontsize=12)
     
     # Corrected correlations
     im2 = axes[1].imshow(corrected_matrix, cmap=cmap, vmin=vmin, vmax=vmax)
-    axes[1].set_title('Attenuation-Corrected Correlations', fontsize=14)
+    axes[1].set_title('Attenuation-corrected correlations', fontsize=18)
     axes[1].set_xticks(range(n_tasks))
     axes[1].set_yticks(range(n_tasks))
     axes[1].set_xticklabels(task_names, rotation=45, ha='right')
@@ -119,7 +120,7 @@ def plot_correlation_heatmaps(
                 display_val = min(val, 1.0) if val > 0 else max(val, -1.0)
                 text_color = 'white' if abs(display_val) > 0.5 else 'black'
                 axes[1].text(j, i, f'{val:.2f}',
-                           ha='center', va='center', color=text_color, fontsize=10)
+                           ha='center', va='center', color=text_color, fontsize=12)
     
     # Colorbar
     fig.colorbar(im2, ax=axes, shrink=0.8, label='Correlation')
@@ -136,9 +137,10 @@ def plot_correlation_histograms(
     naive_samples: np.ndarray,
     corrected_samples: np.ndarray,
     true_correlation: Optional[float] = None,
-    title: str = 'Distribution of Correlation Estimates',
+    title: str = 'Distribution of corrected correlation estimates',
     figsize: Tuple[int, int] = (10, 4),
-    bins: int = 30,
+    bin_width: float = 0.05,
+    confidence_level: float = 0.95,
     save_path: Optional[str] = None
 ) -> plt.Figure:
     """
@@ -156,8 +158,10 @@ def plot_correlation_histograms(
         Figure title.
     figsize : tuple
         Figure size.
-    bins : int
-        Number of histogram bins.
+    bin_width : float, default=0.05
+        Width of histogram bins.
+    confidence_level : float, default=0.95
+        Confidence level for CIs.
     save_path : str, optional
         Path to save figure.
     
@@ -167,29 +171,45 @@ def plot_correlation_histograms(
     """
     fig, axes = plt.subplots(1, 2, figsize=figsize, sharey=True)
     
+    # Fixed x-axis limits and bin edges
+    xlim = (-1.1, 1.1)
+    bin_edges = np.arange(xlim[0], xlim[1] + bin_width, bin_width)
+    
     # Filter out NaN values
+    naive_valid = naive_samples[~np.isnan(naive_samples)]
     corrected_valid = corrected_samples[~np.isnan(corrected_samples)]
     
-    # Naive histogram
-    axes[0].hist(naive_samples, bins=bins, alpha=0.7, color='steelblue', edgecolor='black')
-    axes[0].axvline(np.mean(naive_samples), color='red', linestyle='--', linewidth=2, label='Mean')
-    if true_correlation is not None:
-        axes[0].axvline(true_correlation, color='black', linestyle='-', linewidth=2, label=r'$\rho$')
-    axes[0].set_xlabel('Correlation')
+    # Compute CIs
+    alpha = 1 - confidence_level
+    naive_ci = (
+        np.percentile(naive_valid, 100 * alpha / 2),
+        np.percentile(naive_valid, 100 * (1 - alpha / 2))
+    )
+    corrected_ci = (
+        np.percentile(corrected_valid, 100 * alpha / 2),
+        np.percentile(corrected_valid, 100 * (1 - alpha / 2))
+    )
+    
+    # Plot data
+    data = [
+        (naive_valid, naive_ci, 'Naive correlation', '#fac2a7ff'),
+        (corrected_valid, corrected_ci, 'Corrected correlation', '#408ec1ff')
+    ]
+    
+    for ax, (samples, ci, xlabel, color) in zip(axes, data):
+        ax.hist(samples, bins=bin_edges, alpha=0.7, color=color, edgecolor='black')
+        ax.axvline(np.mean(samples), color='red', linestyle='--', linewidth=2, label='Mean')
+        ax.axvline(ci[0], color='red', linestyle=':', linewidth=1.5, label=f'{int(confidence_level*100)}% CI')
+        ax.axvline(ci[1], color='red', linestyle=':', linewidth=1.5)
+        if true_correlation is not None:
+            ax.axvline(true_correlation, color='black', linestyle='-', linewidth=2, label=r'$\rho$')
+        ax.set_xlabel(xlabel)
+        ax.set_xlim(xlim)
+        ax.legend()
+    
     axes[0].set_ylabel('Frequency')
-    axes[0].set_title('Naive (Uncorrected)')
-    axes[0].legend()
     
-    # Corrected histogram
-    axes[1].hist(corrected_valid, bins=bins, alpha=0.7, color='darkorange', edgecolor='black')
-    axes[1].axvline(np.mean(corrected_valid), color='red', linestyle='--', linewidth=2, label='Mean')
-    if true_correlation is not None:
-        axes[1].axvline(true_correlation, color='black', linestyle='-', linewidth=2, label=r'$\rho$')
-    axes[1].set_xlabel('Correlation')
-    axes[1].set_title('Attenuation-Corrected')
-    axes[1].legend()
-    
-    fig.suptitle(title, fontsize=14)
+    fig.suptitle(title, fontsize=22)
     plt.tight_layout()
     
     if save_path:
@@ -240,15 +260,15 @@ def plot_rmse_comparison(
         x = subset[x_variable]
         
         ax.plot(x, subset['naive_rmse'], '-o', color=colors[i],
-                label=f'{group_variable}={group_val} (Naive)')
+                label=f'{group_variable}={group_val} (naive)')
         ax.plot(x, subset['corrected_rmse'], '--s', color=colors[i],
-                label=f'{group_variable}={group_val} (Corrected)')
+                label=f'{group_variable}={group_val} (corrected)')
     
     ax.axhline(0, color='gray', linestyle=':', linewidth=1)
     
     ax.set_xlabel(x_variable.replace('_', ' ').title(), fontsize=14)
     ax.set_ylabel('RMSE', fontsize=14)
-    ax.set_title('RMSE Comparison: Naive vs. Corrected Estimators', fontsize=14)
+    ax.set_title('RMSE comparison: Naive vs. corrected estimators', fontsize=14)
     
     if x_variable == 'n_subjects':
         ax.set_xscale('log')
@@ -313,9 +333,9 @@ def plot_bias_variance_comparison(
                     label=f'{group_variable}={group_val} (Corrected)')
     
     axes[0].axhline(true_correlation, color='black', linestyle='-', linewidth=2, label='True r')
-    axes[0].set_xlabel(x_variable.replace('_', ' ').title(), fontsize=14)
-    axes[0].set_ylabel('Mean Correlation Estimate', fontsize=14)
-    axes[0].set_title('Bias: Mean Estimates vs. True Correlation', fontsize=14)
+    axes[0].set_xlabel(x_variable.replace('_', ' ').title(), fontsize=18)
+    axes[0].set_ylabel('Mean correlation estimate', fontsize=18)
+    axes[0].set_title('Bias: Mean estimates vs. true correlation', fontsize=18)
     axes[0].legend(bbox_to_anchor=(1.05, 1), loc='upper left')
     axes[0].grid(True, alpha=0.3)
     
@@ -329,9 +349,9 @@ def plot_bias_variance_comparison(
         axes[1].plot(x, subset['corrected_sd'], '--s', color=colors[i],
                     label=f'{group_variable}={group_val} (Corrected)')
     
-    axes[1].set_xlabel(x_variable.replace('_', ' ').title(), fontsize=14)
-    axes[1].set_ylabel('Standard Deviation', fontsize=14)
-    axes[1].set_title('Variance: SD of Correlation Estimates', fontsize=14)
+    axes[1].set_xlabel(x_variable.replace('_', ' ').title(), fontsize=18)
+    axes[1].set_ylabel('Standard deviation', fontsize=18)
+    axes[1].set_title('Variance: SD of correlation estimates', fontsize=18)
     axes[1].legend(bbox_to_anchor=(1.05, 1), loc='upper left')
     axes[1].grid(True, alpha=0.3)
     
@@ -394,19 +414,19 @@ def plot_scatter_with_reliability(
     slope_naive = naive_r * np.std(y) / np.std(x)
     intercept_naive = np.mean(y) - slope_naive * np.mean(x)
     ax.plot(x_range, slope_naive * x_range + intercept_naive, 
-            'b-', linewidth=2, label=f'Naive r = {naive_r:.3f}')
+            'b-', linewidth=2, label=f'Naive r = {naive_r:.2f}')
     
     # Corrected regression line (steeper if corrected_r > naive_r)
     slope_corrected = corrected_r * np.std(y) / np.std(x)
     intercept_corrected = np.mean(y) - slope_corrected * np.mean(x)
     ax.plot(x_range, slope_corrected * x_range + intercept_corrected,
-            'r--', linewidth=2, label=f'Corrected r = {corrected_r:.3f}')
+            'r--', linewidth=2, label=f'Corrected r = {corrected_r:.2f}')
     
-    ax.set_xlabel(xlabel, fontsize=14)
-    ax.set_ylabel(ylabel, fontsize=14)
-    ax.set_title(f'Correlation: Naive vs. Corrected\n'
-                f'(Reliability X = {reliability_x:.3f}, Y = {reliability_y:.3f})',
-                fontsize=14)
+    ax.set_xlabel(xlabel, fontsize=18)
+    ax.set_ylabel(ylabel, fontsize=18)
+    ax.set_title(f'Correlation: naive vs. corrected\n'
+                f'(Reliability X = {reliability_x:.2f}, Y = {reliability_y:.2f})',
+                fontsize=18)
     ax.legend(loc='upper left')
     ax.grid(True, alpha=0.3)
     
@@ -445,12 +465,13 @@ def plot_simulation_summary(
         ax.plot(subset['n_subjects'], subset['corrected_mean'], '--s', color=colors[i],
                 label=f'{n_rep} repeats (Corrected)')
     ax.axhline(true_correlation, color='black', linestyle='-', linewidth=2, label=r'$\rho$')
-    ax.set_xlabel('Sample Size')
-    ax.set_ylabel('Mean Estimate')
-    ax.set_title('Mean Correlation Estimates')
+    ax.set_xlabel('Sample size')
+    ax.set_ylabel('Mean correlation estimate')
+    ax.set_title(' ')
     
     ax.set_xscale('log')
     ax.set_xticks(sample_sizes)
+    ax.yaxis.set_major_formatter(ticker.FormatStrFormatter('%.2f'))
     ax.set_xticklabels(sample_sizes)
     ax.minorticks_off()
     ax.set_box_aspect(1)
@@ -467,12 +488,13 @@ def plot_simulation_summary(
         ax.plot(subset['n_subjects'], subset['corrected_rmse'], '--s', color=colors[i])
     ax.axhline(0, color='gray', linestyle=':', linewidth=1)
     ax.set_xlabel('Sample Size')
-    ax.set_ylabel('RMSE')
-    ax.set_title('Root Mean Square Error')
+    ax.set_ylabel('Root mean square error')
+    ax.set_title(' ')
     
     ax.set_xscale('log')
     ax.set_xticks(sample_sizes)
     ax.set_xticklabels(sample_sizes)
+    ax.yaxis.set_major_formatter(ticker.FormatStrFormatter('%.2f'))
     ax.minorticks_off()
     ax.set_box_aspect(1)
     ax.grid(True, alpha=0.3)
@@ -483,49 +505,49 @@ def plot_simulation_summary(
         subset = results_df[results_df['n_repeats'] == n_rep].sort_values('n_subjects')
         ax.plot(subset['n_subjects'], subset['naive_sd'], '-o', color=colors[i])
         ax.plot(subset['n_subjects'], subset['corrected_sd'], '--s', color=colors[i])
-    ax.set_xlabel('Sample Size')
-    ax.set_ylabel('Standard Deviation')
-    ax.set_title('Sampling Variability')
+    ax.set_xlabel('Sample size')
+    ax.set_ylabel('Standard deviation')
+    ax.set_title(' ')
     
     ax.set_xscale('log')
     ax.set_xticks(sample_sizes)
     ax.set_xticklabels(sample_sizes)
+    ax.yaxis.set_major_formatter(ticker.FormatStrFormatter('%.2f'))
     ax.minorticks_off()
     ax.set_box_aspect(1)
     ax.grid(True, alpha=0.3)
     
     # Bottom right: Recommended estimator
     ax = axes[1, 1]
-    pivot = results_df.pivot(index='n_subjects', columns='n_repeats', values='recommended')
+    pivot = results_df.pivot(index='n_repeats', columns='n_subjects', values='recommended')
     pivot_numeric = pivot.applymap(lambda x: 1 if 'Corrected' in str(x) else 0)
     
-    im = ax.imshow(pivot_numeric.values, cmap='RdYlGn', vmin=0, vmax=1, aspect='auto')
-    ax.set_xticks(range(len(n_repeats_list)))
-    ax.set_xticklabels(n_repeats_list)
-    ax.set_yticks(range(len(sample_sizes)))
-    ax.set_yticklabels(sample_sizes)
-    ax.set_xlabel('Number of Repeats')
-    ax.set_ylabel('Sample Size')
-    ax.set_title('Recommended Estimator\n(Red=Naive, Green=Corrected)')
+    cmap = ListedColormap(['#d15548', '#408ec1'])  # red for 0, blue for 1
+    im = ax.imshow(pivot_numeric.values, cmap=cmap, vmin=0, vmax=1, aspect='auto')
+    ax.set_yticks(range(len(n_repeats_list)))
+    ax.set_yticklabels(n_repeats_list)
+    ax.set_xticks(range(len(sample_sizes)))
+    ax.set_xticklabels(sample_sizes)
+    ax.set_ylabel('Number of repeats')
+    ax.set_xlabel('Sample size')
+    ax.set_title('Should you correct for attenuation?', fontsize=22)
     
     ax.set_box_aspect(1)
     
-    for i in range(len(sample_sizes)):
-        for j in range(len(n_repeats_list)):
+    # Add white text labels (no bbox needed — imshow provides the background)
+    for i in range(len(n_repeats_list)):
+        for j in range(len(sample_sizes)):
             val = pivot_numeric.iloc[i, j]
-            text = 'C' if val == 1 else 'N'
-            color = 'white' if val == 1 else 'black'
-            ax.text(j, i, text, ha='center', va='center', color=color, fontsize=12, fontweight='bold')
+            text = 'Y' if val == 1 else 'N'
+            ax.text(j, i, text, ha='center', va='center', color='white', fontsize=16, fontweight='bold')
     
     # Main Title with Rho
-    plt.suptitle(rf'Simulation Summary ($\rho = {true_correlation}$)', fontsize=16)
+    plt.suptitle(rf'Simulation summary ($\rho = {true_correlation}$)', fontsize=26)
     
     # Place single legend to the right
-    # bbox_to_anchor centers the legend vertically (0.5) and places it just outside the right edge (1.05)
-    fig.legend(handles, labels, loc='center left', bbox_to_anchor=(0.85, 0.5), fontsize=10)
+    fig.legend(handles, labels, loc='center left', bbox_to_anchor=(0.85, 0.5), fontsize=16)
     
     # Adjust layout to make room for legend on the right
-    # rect=[left, bottom, right, top] in normalized (0, 1) figure coordinates
     plt.tight_layout(rect=[0, 0, 0.85, 1])
     
     if save_path:
@@ -576,9 +598,9 @@ def plot_reliability_effect(
     ax.axhline(1.0, color='black', linestyle='--', linewidth=1, label='r = 1.0')
     ax.axhline(0, color='gray', linestyle=':', linewidth=1)
     
-    ax.set_xlabel('Reliability (equal for both variables)', fontsize=14)
-    ax.set_ylabel('Corrected Correlation', fontsize=14)
-    ax.set_title('Effect of Reliability on Corrected Correlation', fontsize=14)
+    ax.set_xlabel('Reliability (equal for both variables)', fontsize=18)
+    ax.set_ylabel('Corrected correlation', fontsize=18)
+    ax.set_title('Effect of reliability on corrected correlation', fontsize=18)
     ax.set_xlim(0.5, 1.0)
     ax.set_ylim(0, 1.5)
     ax.legend(loc='upper left')

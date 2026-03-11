@@ -77,15 +77,14 @@ class CorrelationResult:
         ci_naive = f"[{self.naive_ci[0]:.3f}, {self.naive_ci[1]:.3f}]" if self.naive_ci else "N/A"
         ci_corr = f"[{self.corrected_ci[0]:.3f}, {self.corrected_ci[1]:.3f}]" if self.corrected_ci else "N/A"
         return (
-            f"Correlation Analysis Results (N={self.n_subjects})\n"
+            f"Correlation Analysis Results (N = {self.n_subjects})\n"
             f"{'='*50}\n"
-            f"Naive (uncorrected) r:     {self.naive_r:.4f}  95% CI: {ci_naive}\n"
-            f"Corrected r:               {self.corrected_r:.4f}  95% CI: {ci_corr}\n"
-            f"Reliability X:             {self.reliability_x:.4f}\n"
-            f"Reliability Y:             {self.reliability_y:.4f}\n"
-            f"Attenuation factor:        {self.attenuation_factor:.4f}\n"
+            f"r:               {self.naive_r:.3f}  {ci_naive}\n"
+            f"r_unbiased:      {self.corrected_r:.3f}  {ci_corr}\n"
+            f"Reliability X:   {self.reliability_x:.3f}\n"
+            f"Reliability Y:   {self.reliability_y:.3f}\n"
+            f"r_ceiling:       {self.attenuation_factor:.3f}\n"
         )
-
 
 def compute_variances(measurements: pd.DataFrame) -> Tuple[float, float]:
     """
@@ -105,11 +104,11 @@ def compute_variances(measurements: pd.DataFrame) -> Tuple[float, float]:
         Between-subject variance of the means (individual differences).
     """
     # Within-subject variance: average variance across repeats within each subject
-    within_var = measurements.var(axis=1, ddof=1).mean()
+    within_var = measurements.var(axis=1, ddof=1, skipna=True).mean(skipna=True)
     
     # Between-subject variance: variance of subject means
-    subject_means = measurements.mean(axis=1)
-    between_var = subject_means.var(ddof=1)
+    subject_means = measurements.mean(axis=1, skipna=True)
+    between_var = subject_means.var(ddof=1, skipna=True)
     
     return within_var, between_var
 
@@ -138,12 +137,12 @@ def compute_reliability(measurements: pd.DataFrame) -> float:
     if k < 2:
         raise ValueError("Need at least 2 repeated measurements to compute reliability.")
     
-    means = measurements.mean(axis=1)
-    between_var = means.var(ddof=1)
-    within_var = measurements.var(axis=1, ddof=1).mean()
+    means = measurements.mean(axis=1, skipna=True)
+    between_var = means.var(ddof=1, skipna=True)
+    within_var = measurements.var(axis=1, ddof=1, skipna=True).mean(skipna=True)
     
     denominator = between_var + within_var / k
-    if denominator <= 0:
+    if denominator <= 0 or np.isnan(denominator):
         return np.nan
     
     return between_var / denominator
@@ -175,11 +174,16 @@ def compute_reliability_split_half(measurements: pd.DataFrame) -> float:
     even_half = measurements.iloc[:, 0::2]
     
     # Compute means of each half
-    mean_odd = odd_half.mean(axis=1)
-    mean_even = even_half.mean(axis=1)
+    mean_odd = odd_half.mean(axis=1, skipna=True)
+    mean_even = even_half.mean(axis=1, skipna=True)
+    
+    # Mask NaN values for correlation
+    mask = mean_odd.notna() & mean_even.notna()
+    if mask.sum() < 3:
+        return np.nan
     
     # Correlate the halves
-    r_half, _ = pearsonr(mean_odd, mean_even)
+    r_half, _ = pearsonr(mean_odd[mask], mean_even[mask])
     
     # Spearman-Brown correction (for 2 halves -> full test)
     r_full = (2 * r_half) / (1 + r_half)
@@ -210,6 +214,8 @@ def correct_correlation(r_observed: float,
     r_corrected : float
         Corrected correlation estimate. May exceed 1.0 in small samples.
     """
+    if np.isnan(reliability_x) or np.isnan(reliability_y):
+        return np.nan
     attenuation = np.sqrt(reliability_x * reliability_y)
     if attenuation <= 0:
         return np.nan
@@ -265,35 +271,52 @@ def analyze_correlation(task1_measurements: pd.DataFrame,
         raise ValueError("Task measurements must have the same number of subjects.")
     
     # Compute subject means for correlation
-    means_x = task1_measurements.mean(axis=1).values
-    means_y = task2_measurements.mean(axis=1).values
+    means_x = task1_measurements.mean(axis=1, skipna=True).values
+    means_y = task2_measurements.mean(axis=1, skipna=True).values
     
-    # Point estimates
-    naive_r, _ = pearsonr(means_x, means_y)
-    rel_x = compute_reliability(task1_measurements)
-    rel_y = compute_reliability(task2_measurements)
-    attenuation = np.sqrt(rel_x * rel_y)
-    corrected_r = naive_r / attenuation if attenuation > 0 else np.nan
+    # Mask for valid (non-NaN) pairs
+    valid_mask = ~np.isnan(means_x) & ~np.isnan(means_y)
+    n_valid = valid_mask.sum()
+    
+    if n_valid < 3:
+        raise ValueError("Need at least 3 valid subjects with data for both tasks.")
+    
+    # Point estimates (using only valid pairs)
+    naive_r, _ = pearsonr(means_x[valid_mask], means_y[valid_mask])
+    rel_x = compute_reliability(task1_measurements[valid_mask])
+    rel_y = compute_reliability(task2_measurements[valid_mask])
+    attenuation = np.sqrt(rel_x * rel_y) if not (np.isnan(rel_x) or np.isnan(rel_y)) else np.nan
+    corrected_r = naive_r / attenuation if attenuation and attenuation > 0 else np.nan
     
     # Bootstrap for confidence intervals
     naive_samples = []
     corrected_samples = []
     
+    # Get indices of valid subjects for bootstrapping
+    valid_indices = np.where(valid_mask)[0]
+    
     for _ in range(n_bootstrap):
-        # Resample subjects with replacement
-        idx = np.random.choice(n_subjects, size=n_subjects, replace=True)
+        # Resample valid subjects with replacement
+        idx = np.random.choice(valid_indices, size=len(valid_indices), replace=True)
         
         boot_task1 = task1_measurements.iloc[idx].reset_index(drop=True)
         boot_task2 = task2_measurements.iloc[idx].reset_index(drop=True)
         
-        boot_means_x = boot_task1.mean(axis=1).values
-        boot_means_y = boot_task2.mean(axis=1).values
+        boot_means_x = boot_task1.mean(axis=1, skipna=True).values
+        boot_means_y = boot_task2.mean(axis=1, skipna=True).values
         
-        boot_naive_r, _ = pearsonr(boot_means_x, boot_means_y)
-        boot_rel_x = compute_reliability(boot_task1)
-        boot_rel_y = compute_reliability(boot_task2)
-        boot_atten = np.sqrt(boot_rel_x * boot_rel_y)
-        boot_corrected_r = boot_naive_r / boot_atten if boot_atten > 0 else np.nan
+        # Mask for this bootstrap sample
+        boot_mask = ~np.isnan(boot_means_x) & ~np.isnan(boot_means_y)
+        if boot_mask.sum() < 3:
+            naive_samples.append(np.nan)
+            corrected_samples.append(np.nan)
+            continue
+        
+        boot_naive_r, _ = pearsonr(boot_means_x[boot_mask], boot_means_y[boot_mask])
+        boot_rel_x = compute_reliability(boot_task1[boot_mask])
+        boot_rel_y = compute_reliability(boot_task2[boot_mask])
+        boot_atten = np.sqrt(boot_rel_x * boot_rel_y) if not (np.isnan(boot_rel_x) or np.isnan(boot_rel_y)) else np.nan
+        boot_corrected_r = boot_naive_r / boot_atten if boot_atten and boot_atten > 0 else np.nan
         
         naive_samples.append(boot_naive_r)
         corrected_samples.append(boot_corrected_r)
@@ -317,7 +340,7 @@ def analyze_correlation(task1_measurements: pd.DataFrame,
         attenuation_factor=attenuation,
         naive_ci=naive_ci,
         corrected_ci=corrected_ci,
-        n_subjects=n_subjects,
+        n_subjects=n_valid,  # Report number of valid subjects
         n_repeats_x=task1_measurements.shape[1],
         n_repeats_y=task2_measurements.shape[1]
     )
@@ -360,38 +383,45 @@ def analyze_all_pairs(data: pd.DataFrame,
             if len(cols_x) < 2 or len(cols_y) < 2:
                 continue
             
-            task1_data = data[cols_x].dropna()
-            task2_data = data[cols_y].dropna()
+            task1_data = data[cols_x]
+            task2_data = data[cols_y]
             
-            # Ensure same subjects
-            common_idx = task1_data.index.intersection(task2_data.index)
+            # Find subjects with at least some data in both tasks
+            has_x = task1_data.notna().any(axis=1)
+            has_y = task2_data.notna().any(axis=1)
+            common_idx = data.index[has_x & has_y]
+            
             task1_data = task1_data.loc[common_idx]
             task2_data = task2_data.loc[common_idx]
             
             if len(task1_data) < 10:
                 continue
             
-            result = analyze_correlation(
-                task1_data, task2_data,
-                n_bootstrap=n_bootstrap,
-                confidence_level=confidence_level,
-                random_state=random_state
-            )
-            
-            results.append({
-                'task_x': task_x,
-                'task_y': task_y,
-                'n_subjects': result.n_subjects,
-                'naive_r': result.naive_r,
-                'naive_ci_lower': result.naive_ci[0],
-                'naive_ci_upper': result.naive_ci[1],
-                'corrected_r': result.corrected_r,
-                'corrected_ci_lower': result.corrected_ci[0],
-                'corrected_ci_upper': result.corrected_ci[1],
-                'reliability_x': result.reliability_x,
-                'reliability_y': result.reliability_y,
-                'attenuation_factor': result.attenuation_factor
-            })
+            try:
+                result = analyze_correlation(
+                    task1_data, task2_data,
+                    n_bootstrap=n_bootstrap,
+                    confidence_level=confidence_level,
+                    random_state=random_state
+                )
+                
+                results.append({
+                    'task_x': task_x,
+                    'task_y': task_y,
+                    'n_subjects': result.n_subjects,
+                    'naive_r': result.naive_r,
+                    'naive_ci_lower': result.naive_ci[0],
+                    'naive_ci_upper': result.naive_ci[1],
+                    'corrected_r': result.corrected_r,
+                    'corrected_ci_lower': result.corrected_ci[0],
+                    'corrected_ci_upper': result.corrected_ci[1],
+                    'reliability_x': result.reliability_x,
+                    'reliability_y': result.reliability_y,
+                    'attenuation_factor': result.attenuation_factor
+                })
+            except ValueError:
+                # Skip pairs with insufficient valid data
+                continue
     
     return pd.DataFrame(results)
 
